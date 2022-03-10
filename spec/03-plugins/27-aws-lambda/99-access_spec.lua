@@ -136,7 +136,7 @@ for _, strategy in helpers.each_strategy() do
       }
 
       local route21 = bp.routes:insert {
-        hosts       = { "lambda21.test" },
+        hosts       = { "lambda21.com" },
         protocols   = { "http", "https" },
         service     = null,
       }
@@ -422,6 +422,7 @@ for _, strategy in helpers.each_strategy() do
           port                 = 10001,
           aws_key              = "mock-key",
           aws_secret           = "mock-secret",
+          aws_region           = "us-east-1",
           function_name        = "functionEcho",
           proxy_url            = "http://127.0.0.1:13128",
           keepalive            = 1,
@@ -455,13 +456,13 @@ for _, strategy in helpers.each_strategy() do
           -- we don't actually use any stream proxy features in this test suite,
           -- but this is needed in order to load our forward-proxy stream_mock fixture
           stream_listen = helpers.get_proxy_ip(false) .. ":19000",
-        }, nil, nil, fixtures))  
+        }, nil, nil, fixtures))
       end)
 
       lazy_teardown(function()
         helpers.stop_kong()
       end)
-  
+
       it("invokes a Lambda function with GET", function()
         local res = assert(proxy_client:send {
           method  = "GET",
@@ -1074,13 +1075,13 @@ for _, strategy in helpers.each_strategy() do
         assert.equal("some_value1", body.key1)
         assert.is_nil(res.headers["X-Amz-Function-Error"])
       end)
-      
+
       it("works with a forward proxy", function()
         local res = assert(proxy_client:send({
           method  = "GET",
           path    = "/get?a=1&b=2",
           headers = {
-            ["Host"] = "lambda21.test"
+            ["Host"] = "lambda21.com"
           }
         }))
 
@@ -1102,7 +1103,7 @@ for _, strategy in helpers.each_strategy() do
           -- we don't actually use any stream proxy features in this test suite,
           -- but this is needed in order to load our forward-proxy stream_mock fixture
           stream_listen = helpers.get_proxy_ip(false) .. ":19000",
-        }, nil, nil, fixtures))  
+        }, nil, nil, fixtures))
       end)
 
       lazy_teardown(function()

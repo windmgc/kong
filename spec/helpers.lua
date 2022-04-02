@@ -2840,11 +2840,11 @@ end
   mock_upstream_stream_ssl_port = MOCK_UPSTREAM_STREAM_SSL_PORT,
   mock_grpc_upstream_proto_path = MOCK_GRPC_UPSTREAM_PROTO_PATH,
 
-  grpcbin_host = GRPCBIN_HOST,
-  grpcbin_port = GRPCBIN_PORT,
-  grpcbin_ssl_port = GRPCBIN_SSL_PORT,
-  grpcbin_url = string.format("grpc://%s:%d", GRPCBIN_HOST, GRPCBIN_PORT),
-  grpcbin_ssl_url = string.format("grpcs://%s:%d", GRPCBIN_HOST, GRPCBIN_SSL_PORT),
+  grpcbin_host      = GRPCBIN_HOST,
+  grpcbin_port      = GRPCBIN_PORT,
+  grpcbin_ssl_port  = GRPCBIN_SSL_PORT,
+  grpcbin_url       = string.format("grpc://%s:%d", GRPCBIN_HOST, GRPCBIN_PORT),
+  grpcbin_ssl_url   = string.format("grpcs://%s:%d", GRPCBIN_HOST, GRPCBIN_SSL_PORT),
 
   redis_host = os.getenv("KONG_SPEC_REDIS_HOST") or "127.0.0.1",
 

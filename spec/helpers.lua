@@ -19,6 +19,9 @@ local MOCK_UPSTREAM_PORT = 15555
 local MOCK_UPSTREAM_SSL_PORT = 15556
 local MOCK_UPSTREAM_STREAM_PORT = 15557
 local MOCK_UPSTREAM_STREAM_SSL_PORT = 15558
+local GRPCBIN_HOST = os.getenv("KONG_SPEC_TEST_GRPCBIN_HOST") or "localhost"
+local GRPCBIN_PORT = tonumber(os.getenv("KONG_SPEC_TEST_GRPCBIN_PORT") or "9000")
+local GRPCBIN_SSL_PORT = tonumber(os.getenv("KONG_SPEC_TEST_GRPCBIN_SSL_PORT") or "9001")
 local MOCK_GRPC_UPSTREAM_PROTO_PATH = "./spec/fixtures/grpc/hello.proto"
 local BLACKHOLE_HOST = "10.255.255.255"
 local KONG_VERSION = require("kong.meta")._VERSION
@@ -979,6 +982,7 @@ local function grpc_client(host, port, opts)
       end
 
       local opts = gen_grpcurl_opts(pl_tablex.merge(t.opts, args.opts, true))
+      ngx.log(ngx.ERR, string.format(t.cmd_template, opts, service))
       local ok, _, out, err = exec(string.format(t.cmd_template, opts, service), true)
 
       if ok then
@@ -2835,6 +2839,12 @@ end
   mock_upstream_stream_port     = MOCK_UPSTREAM_STREAM_PORT,
   mock_upstream_stream_ssl_port = MOCK_UPSTREAM_STREAM_SSL_PORT,
   mock_grpc_upstream_proto_path = MOCK_GRPC_UPSTREAM_PROTO_PATH,
+
+  grpcbin_host = GRPCBIN_HOST,
+  grpcbin_port = GRPCBIN_PORT,
+  grpcbin_ssl_port = GRPCBIN_SSL_PORT,
+  grpcbin_url = string.format("grpc://%s:%d", GRPCBIN_HOST, GRPCBIN_PORT),
+  grpcbin_ssl_url = string.format("grpcs://%s:%d", GRPCBIN_HOST, GRPCBIN_SSL_PORT),
 
   redis_host = os.getenv("KONG_SPEC_REDIS_HOST") or "127.0.0.1",
 

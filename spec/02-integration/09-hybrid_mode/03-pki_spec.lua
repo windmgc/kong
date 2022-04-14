@@ -123,7 +123,7 @@ for _, cluster_protocol in ipairs{"json", "wrpc"} do
             if status == 200 then
               return true
             end
-          end, 10)
+          end, 30)
         end)
 
         it("cache invalidation works on config change", function()

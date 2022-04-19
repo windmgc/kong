@@ -206,23 +206,6 @@ for _, strategy in helpers.each_strategy() do
           local port2 = bu.add_target(bp, upstream_id, localhost)
           local api_host = bu.add_api(bp, upstream_name)
 
-          bp.plugins:insert({
-            name = "post-function",
-            config = {
-              header_filter = {[[
-                local value = ngx.ctx and
-                              ngx.ctx.balancer_data and
-                              ngx.ctx.balancer_data.hash_value
-                if value == "" or value == nil then
-                  value = "NONE"
-                end
-
-                ngx.header["x-balancer-hash-value"] = value
-                ngx.header["x-uri"] = ngx.var.request_uri
-              ]]},
-            },
-          })
-
           -- setup target servers
           local server1 = https_server.new(port1, localhost)
           local server2 = https_server.new(port2, localhost)

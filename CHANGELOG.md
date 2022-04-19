@@ -125,6 +125,8 @@
 
 - Added `cache_key` on target entity for uniqueness detection.
   [#8179](https://github.com/Kong/kong/pull/8179)
+- Added `path` and `query_arg` options to upstream `hash_on` for load balancing.
+  [8701](https://github.com/Kong/kong/pull/8701)
 
 #### Plugins
 

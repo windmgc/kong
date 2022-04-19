@@ -160,8 +160,8 @@ describe("load upstreams", function()
   end)
 
   it("hash_on and hash_fallback must be different query args", function()
-    ok, errs = validate({ hash_on = "query_arg", hash_on_query_arg = "same",
-                          hash_fallback = "query_arg", hash_fallback_query_arg = "same" })
+    local ok, errs = validate({ hash_on = "query_arg", hash_on_query_arg = "same",
+                                hash_fallback = "query_arg", hash_fallback_query_arg = "same" })
     assert.falsy(ok)
     assert.not_nil(errs["@entity"])
     assert.same(errs["@entity"],

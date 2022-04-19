@@ -122,16 +122,11 @@ local function client_requests(n, host_or_headers, proxy_host, proxy_port, proto
       end
     end
 
-    local path, query = "/", nil
-    if uri then
-      path = uri:gsub("?.*", "")
-      query = ngx.decode_args(uri:gsub(".*?", ""))
-    end
+    local path = uri or "/"
 
     local res = client:send {
       method = "GET",
       path = path,
-      query = query,
       headers = type(host_or_headers) == "string"
                 and { ["Host"] = host_or_headers }
                 or host_or_headers

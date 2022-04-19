@@ -230,15 +230,29 @@ local r =  {
       then_field = "hash_fallback", then_match = { one_of = { "none" }, },
     }, },
 
-    -- hash_fallback must not equal hash_on (headers are allowed)
+    -- hash_fallback must not equal hash_on (headers and query args are allowed)
     { conditional = {
       if_field = "hash_on", if_match = { match = "^consumer$" },
-      then_field = "hash_fallback", then_match = { one_of = { "none", "ip", "header", "cookie" }, },
+      then_field = "hash_fallback", then_match = { one_of = { "none", "ip",
+                                                              "header", "cookie",
+                                                              "query_arg", "path",
+                                                            }, },
     }, },
     { conditional = {
       if_field = "hash_on", if_match = { match = "^ip$" },
-      then_field = "hash_fallback", then_match = { one_of = { "none", "consumer", "header", "cookie" }, },
+      then_field = "hash_fallback", then_match = { one_of = { "none", "consumer",
+                                                              "header", "cookie",
+                                                              "query_arg", "path",
+                                                            }, },
     }, },
+    { conditional = {
+      if_field = "hash_on", if_match = { match = "^path$" },
+      then_field = "hash_fallback", then_match = { one_of = { "none", "consumer",
+                                                              "header", "cookie",
+                                                              "query_arg", "ip",
+                                                            }, },
+    }, },
+
 
     -- different headers
     { distinct = { "hash_on_header", "hash_fallback_header" }, },
@@ -252,6 +266,9 @@ local r =  {
       if_field = "hash_fallback", if_match = { match = "^query_arg$" },
       then_field = "hash_fallback_query_arg", then_match = { required = true },
     }, },
+
+    -- query arg and fallback must be different
+    { distinct = { "hash_on_query_arg" , "hash_fallback_query_arg" }, },
   },
 
   -- This is a hack to preserve backwards compatibility with regard to the

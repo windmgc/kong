@@ -142,7 +142,35 @@ describe("load upstreams", function()
     ok, errs = validate({ hash_on = "ip", hash_fallback = "ip" })
     assert.falsy(ok)
     assert.truthy(errs.hash_fallback)
+    ok, errs = validate({ hash_on = "path", hash_fallback = "path" })
+    assert.falsy(ok)
+    assert.truthy(errs.hash_fallback)
   end)
+
+  it("hash_on = 'query_arg' makes hash_on_query_arg required", function()
+    local ok, errs = validate({ hash_on = "query_arg" })
+    assert.falsy(ok)
+    assert.truthy(errs.hash_on_query_arg)
+  end)
+
+  it("hash_fallback = 'query_arg' makes hash_fallback_query_arg required", function()
+    local ok, errs = validate({ hash_on = "ip", hash_fallback = "query_arg" })
+    assert.falsy(ok)
+    assert.truthy(errs.hash_fallback_query_arg)
+  end)
+
+  it("hash_on and hash_fallback must be different query args", function()
+    ok, errs = validate({ hash_on = "query_arg", hash_on_query_arg = "same",
+                          hash_fallback = "query_arg", hash_fallback_query_arg = "same" })
+    assert.falsy(ok)
+    assert.not_nil(errs["@entity"])
+    assert.same(errs["@entity"],
+      {
+        "values of these fields must be distinct: 'hash_on_query_arg', 'hash_fallback_query_arg'"
+      }
+    )
+  end)
+
 
   it("produces defaults", function()
     local u = {

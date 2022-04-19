@@ -57,6 +57,7 @@ local function get_value_to_hash(upstream, ctx)
 
   local identifier
   local header_field_name = "hash_on_header"
+  local query_arg_field_name = "hash_on_query_arg"
 
   for _ = 1,2 do
 
@@ -97,6 +98,18 @@ local function get_value_to_hash(upstream, ctx)
         }
       end
 
+    elseif hash_on == "path" then
+      -- for the sake of simplicity, we're using the NGINX-normalized version of
+      -- the path here instead of running ngx.var.request_uri through our
+      -- internal normalization mechanism
+      identifier = var.uri
+
+    elseif hash_on == "query_arg" then
+      local arg_name = upstream[query_arg_field_name]
+      identifier = arg_name and var["arg_" .. arg_name]
+
+    else
+      log(ERR, "unknown hash_on value: ", hash_on)
     end
 
     if identifier then
@@ -106,6 +119,7 @@ local function get_value_to_hash(upstream, ctx)
     -- we missed the first, so now try the fallback
     hash_on = upstream.hash_fallback
     header_field_name = "hash_fallback_header"
+    query_arg_field_name = "hash_fallback_query_arg"
     if hash_on == "none" then
       return nil
     end

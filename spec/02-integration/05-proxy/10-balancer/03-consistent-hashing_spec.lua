@@ -23,6 +23,7 @@ for _, strategy in helpers.each_strategy() do
           assert(helpers.start_kong({
             database   = strategy,
             nginx_conf = "spec/fixtures/custom_nginx.template",
+            plugins    = "post-function",
             db_update_frequency = 0.1,
           }, nil, nil, nil))
 
@@ -195,6 +196,126 @@ for _, strategy in helpers.each_strategy() do
 
         end)
 
+        it("hashing on path", function()
+          local requests = bu.SLOTS * 2 -- go round the balancer twice
+
+          bu.begin_testcase_setup(strategy, bp)
+          local upstream_name, upstream_id = bu.add_upstream(bp, {
+            hash_on = "path",
+          })
+          local port1 = bu.add_target(bp, upstream_id, localhost)
+          local port2 = bu.add_target(bp, upstream_id, localhost)
+          local api_host = bu.add_api(bp, upstream_name)
+          bu.end_testcase_setup(strategy, bp)
+
+          -- setup target servers
+          local server1 = https_server.new(port1, localhost)
+          local server2 = https_server.new(port2, localhost)
+          server1:start()
+          server2:start()
+
+          -- Go hit them with our test requests
+          local oks = bu.client_requests(requests, api_host)
+
+          -- collect server results; hitcount
+          -- one should get all the hits, the other 0
+          local count1 = server1:shutdown()
+          local count2 = server2:shutdown()
+
+          -- verify
+          assert.are.equal(requests, oks)
+          assert(count1.total == 0 or count1.total == requests, "counts should either get 0 or ALL hits")
+          assert(count2.total == 0 or count2.total == requests, "counts should either get 0 or ALL hits")
+          assert(count1.total + count2.total == requests)
+        end)
+
+        describe("hashing on a query string arg", function()
+          local function test(uri, expect, upstream)
+            local requests = bu.SLOTS * 2 -- go round the balancer twice
+
+            bu.begin_testcase_setup(strategy, bp)
+            local upstream_name, upstream_id = bu.add_upstream(bp, upstream)
+
+            local port1 = bu.add_target(bp, upstream_id, localhost)
+            local port2 = bu.add_target(bp, upstream_id, localhost)
+            local api_host = bu.add_api(bp, upstream_name)
+
+            bp.plugins:insert({
+              name = "post-function",
+              config = {
+                header_filter = {[[
+                  local value = ngx.ctx and
+                                ngx.ctx.balancer_data and
+                                ngx.ctx.balancer_data.hash_value
+                  if value == "" or value == nil then
+                    value = "NONE"
+                  end
+
+                  ngx.header["x-balancer-hash-value"] = value
+                ]]},
+              },
+            })
+
+            -- setup target servers
+            local server1 = https_server.new(port1, localhost)
+            local server2 = https_server.new(port2, localhost)
+            server1:start()
+            server2:start()
+
+            bu.end_testcase_setup(strategy, bp)
+
+            local client = helpers.proxy_client()
+            local res = assert(client:request({
+              method = "GET",
+              path = uri,
+              headers = { host = api_host },
+            }))
+
+            -- Go hit them with our test requests
+            local oks = bu.client_requests(requests, api_host, nil, nil, nil, uri)
+
+            -- collect server results; hitcount
+            -- one should get all the hits, the other 0
+            local count1 = server1:shutdown()
+            local count2 = server2:shutdown()
+
+            -- verify
+            local hash = assert.response(res).has_header("x-balancer-hash-value")
+            assert.res_status(200, res)
+            assert.equal(expect, hash)
+            assert.equal(requests, oks)
+
+            -- account for our hash_value test request
+            requests = requests + 1
+
+            assert(count1.total == 0 or count1.total == requests, "counts should either get 0 or ALL hits")
+            assert(count2.total == 0 or count2.total == requests, "counts should either get 0 or ALL hits")
+            assert(count1.total + count2.total == requests)
+          end
+
+          it("when the arg is present in the request", function()
+            test("/?hashme=123", "123", {
+              hash_on = "query_arg",
+              hash_on_query_arg = "hashme",
+            })
+          end)
+
+          it("when the arg is not present in request", function()
+            test("/", "NONE", {
+              hash_on = "query_arg",
+              hash_on_query_arg = "hashme",
+            })
+          end)
+
+          it("as a fallback", function()
+            test("/?fallback=123", "123", {
+              hash_on = "query_arg",
+              hash_on_query_arg = "absent",
+              hash_fallback = "query_arg",
+              hash_fallback_query_arg = "fallback",
+            })
+          end)
+        end)
       end)
     end)
   end

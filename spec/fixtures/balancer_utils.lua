@@ -102,7 +102,7 @@ local function put_target_endpoint(upstream_id, host, port, endpoint)
 end
 
 
-local function client_requests(n, host_or_headers, proxy_host, proxy_port, protocol)
+local function client_requests(n, host_or_headers, proxy_host, proxy_port, protocol, uri)
   local oks, fails = 0, 0
   local last_status
   for _ = 1, n do
@@ -122,9 +122,16 @@ local function client_requests(n, host_or_headers, proxy_host, proxy_port, proto
       end
     end
 
+    local path, query = "/", nil
+    if uri then
+      path = uri:gsub("?.*", "")
+      query = ngx.decode_args(uri:gsub(".*?", ""))
+    end
+
     local res = client:send {
       method = "GET",
-      path = "/",
+      path = path,
+      query = query,
       headers = type(host_or_headers) == "string"
                 and { ["Host"] = host_or_headers }
                 or host_or_headers

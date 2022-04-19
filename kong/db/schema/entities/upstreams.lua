@@ -32,7 +32,7 @@ end
 local hash_on = Schema.define {
   type = "string",
   default = "none",
-  one_of = { "none", "consumer", "ip", "header", "cookie" }
+  one_of = { "none", "consumer", "ip", "header", "cookie", "path", "query_arg" }
 }
 
 
@@ -186,6 +186,8 @@ local r =  {
     { hash_fallback_header = typedefs.header_name, },
     { hash_on_cookie = { type = "string",  custom_validator = utils.validate_cookie_name }, },
     { hash_on_cookie_path = typedefs.path{ default = "/", }, },
+    { hash_on_query_arg = { type = "string" }, },
+    { hash_fallback_query_arg = { type = "string" }, },
     { slots = { type = "integer", default = 10000, between = { 10, 2^16 }, }, },
     { healthchecks = { type = "record",
         default = healthchecks_defaults,
@@ -240,6 +242,16 @@ local r =  {
 
     -- different headers
     { distinct = { "hash_on_header", "hash_fallback_header" }, },
+
+    -- hash_on_query_arg must be present when hashing on query_arg
+    { conditional = {
+      if_field = "hash_on", if_match = { match = "^query_arg$" },
+      then_field = "hash_on_query_arg", then_match = { required = true },
+    }, },
+    { conditional = {
+      if_field = "hash_fallback", if_match = { match = "^query_arg$" },
+      then_field = "hash_fallback_query_arg", then_match = { required = true },
+    }, },
   },
 
   -- This is a hack to preserve backwards compatibility with regard to the

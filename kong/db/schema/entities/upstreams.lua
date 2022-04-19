@@ -235,14 +235,14 @@ local r =  {
       if_field = "hash_on", if_match = { match = "^consumer$" },
       then_field = "hash_fallback", then_match = { one_of = { "none", "ip",
                                                               "header", "cookie",
-                                                              "query_arg", "path",
+                                                              "path", "query_arg",
                                                             }, },
     }, },
     { conditional = {
       if_field = "hash_on", if_match = { match = "^ip$" },
       then_field = "hash_fallback", then_match = { one_of = { "none", "consumer",
                                                               "header", "cookie",
-                                                              "query_arg", "path",
+                                                              "path", "query_arg",
                                                             }, },
     }, },
     { conditional = {

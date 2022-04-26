@@ -688,6 +688,8 @@ local CONF_INFERENCES = {
 
   lmdb_environment_path = { typ = "string" },
   lmdb_map_size = { typ = "string" },
+
+  instrumentation_trace_types = { typ = "array" },
 }
 
 

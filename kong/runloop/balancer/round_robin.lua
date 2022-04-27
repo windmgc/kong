@@ -91,6 +91,8 @@ function roundrobin_algorithm:getPeer(cacheOnly, handle, hashValue)
       self.pointer = 1
     end
 
+    ngx.log(ngx.ERR, "wheel_size = ", #self.wheel)
+
     address = self.wheel[self.pointer]
     if address ~= nil and address.available and not address.disabled then
       ip, port, hostname = balancers.getAddressPeer(address, cacheOnly)

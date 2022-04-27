@@ -33,26 +33,30 @@ fi
 if [ "$TEST_SUITE" == "integration" ]; then
     if [[ "$TEST_SPLIT" == first* ]]; then
         # GitHub Actions, run first batch of integration tests
-        eval "$TEST_CMD" $(ls -d spec/02-integration/* | head -n4)
+        # eval "$TEST_CMD" $(ls -d spec/02-integration/* | head -n4)
+        echo "H"
 
     elif [[ "$TEST_SPLIT" == second* ]]; then
         # GitHub Actions, run second batch of integration tests
         # Note that the split here is chosen carefully to result
         # in a similar run time between the two batches, and should
         # be adjusted if imbalance become significant in the future
-        eval "$TEST_CMD" $(ls -d spec/02-integration/* | tail -n+5)
+        # eval "$TEST_CMD" $(ls -d spec/02-integration/* | tail -n+5)
+        bin/busted --verbose -o htest --no-k -t only spec/02-integration/05-proxy/10-balancer/04-round-robin_spec.lua
 
     else
         # Non GitHub Actions
-        eval "$TEST_CMD" spec/02-integration/
+        # eval "$TEST_CMD" spec/02-integration/
+        echo "H"
     fi
 fi
 
 if [ "$TEST_SUITE" == "dbless" ]; then
-    eval "$TEST_CMD" spec/02-integration/02-cmd \
-                     spec/02-integration/05-proxy \
-                     spec/02-integration/04-admin_api/02-kong_routes_spec.lua \
-                     spec/02-integration/04-admin_api/15-off_spec.lua
+    # eval "$TEST_CMD" spec/02-integration/02-cmd \
+    #                  spec/02-integration/05-proxy \
+    #                  spec/02-integration/04-admin_api/02-kong_routes_spec.lua \
+    #                  spec/02-integration/04-admin_api/15-off_spec.lua
+    echo "H"
 fi
 if [ "$TEST_SUITE" == "plugins" ]; then
     set +ex
@@ -60,18 +64,21 @@ if [ "$TEST_SUITE" == "plugins" ]; then
 
     if [[ "$TEST_SPLIT" == first* ]]; then
         # GitHub Actions, run first batch of plugin tests
-        PLUGINS=$(ls -d spec/03-plugins/* | head -n22)
+        # PLUGINS=$(ls -d spec/03-plugins/* | head -n22)
+        echo "H"
 
     elif [[ "$TEST_SPLIT" == second* ]]; then
         # GitHub Actions, run second batch of plugin tests
         # Note that the split here is chosen carefully to result
         # in a similar run time between the two batches, and should
         # be adjusted if imbalance become significant in the future
-        PLUGINS=$(ls -d spec/03-plugins/* | tail -n+23)
+        # PLUGINS=$(ls -d spec/03-plugins/* | tail -n+23)
+        echo "H"
 
     else
         # Non GitHub Actions
-        PLUGINS=$(ls -d spec/03-plugins/*)
+        # PLUGINS=$(ls -d spec/03-plugins/*)
+        echo "H"
     fi
 
     for p in $PLUGINS; do
@@ -123,11 +130,12 @@ if [ "$TEST_SUITE" == "plugins" ]; then
     fi
 fi
 if [ "$TEST_SUITE" == "pdk" ]; then
-    TEST_NGINX_RANDOMIZE=1 prove -I. -r t/01-pdk
+    # TEST_NGINX_RANDOMIZE=1 prove -I. -r t/01-pdk
+    echo "H"
 fi
 if [ "$TEST_SUITE" == "unit" ]; then
     unset KONG_TEST_NGINX_USER KONG_PG_PASSWORD KONG_TEST_PG_PASSWORD
-    scripts/autodoc
-    bin/busted -v -o htest spec/01-unit
-    make lint
+    # scripts/autodoc
+    # bin/busted -v -o htest spec/01-unit
+    # make lint
 fi

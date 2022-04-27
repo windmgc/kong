@@ -379,7 +379,7 @@ for _, consistency in ipairs(bu.consistencies) do
       end)
 
       for mode, localhost in pairs(bu.localhosts) do
-        it("removing and adding the same target #db #" .. mode, function()
+        it("#only removing and adding the same target #db #" .. mode, function()
 
           bu.begin_testcase_setup(strategy, bp)
           local upstream_name, upstream_id = bu.add_upstream(bp)
@@ -393,6 +393,11 @@ for _, consistency in ipairs(bu.consistencies) do
           server:start()
           local oks = bu.client_requests(requests, api_host)
           local count = server:shutdown()
+
+          if oks ~= requests then
+            os.execute("cat servroot/logs/error.log")
+          end
+
           assert.equal(requests, oks)
           assert.equal(requests, count.total)
 

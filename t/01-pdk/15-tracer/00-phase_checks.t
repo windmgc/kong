@@ -52,13 +52,14 @@ qq{
     init_worker_by_lua_block {
         phases = require("kong.pdk.private.phases").phases
 
+        local noop = function () end
         phase_check_module = "tracer"
         phase_check_data = {
             {
                 method        = "new",
                 args          = {"tracer"},
                 init_worker   = false,
-                certificate   = false,
+                certificate   = "pending",
                 rewrite       = true,
                 access        = true,
                 header_filter = true,
@@ -70,7 +71,7 @@ qq{
                 method        = "start_span",
                 args          = {"span_name"},
                 init_worker   = false,
-                certificate   = false,
+                certificate   = "pending",
                 rewrite       = true,
                 access        = true,
                 header_filter = true,
@@ -82,7 +83,7 @@ qq{
                 method        = "active_span",
                 args          = {},
                 init_worker   = false,
-                certificate   = false,
+                certificate   = "pending",
                 rewrite       = true,
                 access        = true,
                 header_filter = true,
@@ -94,7 +95,7 @@ qq{
                 method        = "set_active_span",
                 args          = {},
                 init_worker   = false,
-                certificate   = false,
+                certificate   = "pending",
                 rewrite       = true,
                 access        = true,
                 header_filter = true,
@@ -102,6 +103,18 @@ qq{
                 body_filter   = true,
                 log           = true,
                 admin_api     = true,
+            }, {
+                method        = "process_span",
+                args          = { noop },
+                init_worker   = "forced false",
+                certificate   = "pending",
+                rewrite       = "forced false",
+                access        = "forced false",
+                response      = "forced false",
+                header_filter = "forced false",
+                body_filter   = "forced false",
+                log           = true,
+                admin_api     = "forced false",
             },
         }
 

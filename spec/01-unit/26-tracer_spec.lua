@@ -1,7 +1,7 @@
 require "spec.helpers" -- initializes 'kong' global for tracer
 
 describe("Tracer PDK", function()
-  local ok, _
+  local ok, err, _
 
   lazy_setup(function()
     local kong_global = require "kong.global"
@@ -12,11 +12,11 @@ describe("Tracer PDK", function()
   describe("test tracer init", function()
 
     it("tracer instance is created", function ()
-      ok, _ = pcall(require "kong.pdk.tracer".new)
-      assert.is_true(ok)
+      ok, err = pcall(require "kong.pdk.tracer".new)
+      assert.is_true(ok, err)
 
-      ok, _ = pcall(kong.tracer.new)
-      assert.is_true(ok)
+      ok, err = pcall(kong.tracer.new)
+      assert.is_true(ok, err)
     end)
 
     it("default tracer instance", function ()
@@ -36,7 +36,8 @@ describe("Tracer PDK", function()
     local n_tracer = require "kong.pdk.tracer".new()
 
     before_each(function()
-      ngx.ctx.active_span = nil
+      c_tracer.set_active_span(nil)
+      n_tracer.set_active_span(nil)
     end)
 
     it("fails when span name is empty", function ()
@@ -51,8 +52,8 @@ describe("Tracer PDK", function()
 
     it("create noop span with noop tracer", function ()
       local span = n_tracer.start_span("meow")
-      ok, _ = pcall(span.noop) -- __index
-      assert.is_true(ok)
+      assert.is_nil(span.span_id)
+      assert.is_nil(span.tracer)
     end)
 
     it("noop span operations", function ()
@@ -60,7 +61,6 @@ describe("Tracer PDK", function()
       assert(pcall(span.set_attribute, span, "foo", "bar"))
       assert(pcall(span.add_event, span, "foo", "bar"))
       assert(pcall(span.finish, span))
-      assert(pcall(span.any, span))
     end)
 
     it("fails create span with options", function ()
@@ -92,6 +92,7 @@ describe("Tracer PDK", function()
         attributes = {
           "key1", "value1"
         },
+        is_recording = true,
       }
 
       span = c_tracer.start_span("meow", tpl)
@@ -132,15 +133,10 @@ describe("Tracer PDK", function()
       assert.same(child_span.span_id, third_child_span.parent_id)
     end)
 
-    it("clear span table when finished", function ()
+    it("access span table after finished", function ()
       local span = c_tracer.start_span("meow")
-
-      -- span table is released, the value is empty
       span:finish()
-      assert.same({}, span)
-
-      -- span is not accessible (metatable is cleard)
-      assert.error(function () span:finish() end)
+      assert.has_no.error(function () span:finish() end)
     end)
 
     it("ends active span", function ()
@@ -157,8 +153,6 @@ describe("Tracer PDK", function()
       assert.has_no.error(function () active_span:finish() end)
 
       assert.same(span, active_span)
-      assert.same({}, active_span)
-      assert.same({}, span)
     end)
 
   end)

@@ -23,15 +23,6 @@ local check_phase = phase_checker.check
 local PHASES = phase_checker.phases
 local ffi_time_unix_nano = utils.time_ns
 
-local phases_with_ctx =
-    phase_checker.new(PHASES.rewrite,
-                      PHASES.access,
-                      PHASES.header_filter,
-                      PHASES.response,
-                      PHASES.body_filter,
-                      PHASES.log,
-                      PHASES.admin_api)
-
 
 --- Constants
 -- @section constants
@@ -69,11 +60,12 @@ local span_mt = {}
 span_mt.__index = span_mt
 
 -- noop Span metatable
-local noop_span_mt = {
-  __index = function ()
-    return function () end
-  end
-}
+local noop_span_mt = {}
+noop_span_mt.is_recording = false
+noop_span_mt.__index = noop_span_mt
+noop_span_mt.finish = function () end
+noop_span_mt.set_attribute = function () end
+noop_span_mt.add_event = function () end
 
 
 local function new_span(tracer, name, options)
@@ -136,6 +128,7 @@ local function new_span(tracer, name, options)
   span.sampled = parent_span and parent_span.sampled
                   or options.sampled
                   or band(tracer.sampler(), FLAG_SAMPLED) == FLAG_SAMPLED
+  span.is_recording = true
 
   return setmetatable(span, span_mt)
 end
@@ -160,9 +153,14 @@ function span_mt:finish(end_time_ns)
 
   self.end_time_ns = end_time_ns or ffi_time_unix_nano()
 
+  if not self.is_recording then
+    return
+  end
+
+  self.is_recording = false
   -- insert the span to ctx
   if not ngx.ctx.KONG_SPANS then
-    ngx.ctx.KONG_SPANS = tablepool.fetch("KONG_SPANS", 4)
+    ngx.ctx.KONG_SPANS = tablepool.fetch("KONG_SPANS", 4, 0)
   end
 
   insert(ngx.ctx.KONG_SPANS, self)
@@ -242,6 +240,8 @@ local tracer_cache = setmetatable({}, {__mode = "k"})
 
 --- New Tracer
 local function new_tracer(name, options)
+  name = name or "default"
+
   if tracer_cache[name] then
     return tracer_cache[name]
   end
@@ -254,15 +254,15 @@ local function new_tracer(name, options)
 
   self.noop = options.noop == true
   self.sampler = options.sampler or always_on_sampler
-  self.exporter = options.exporter
 
   --- Get the active span
   -- Returns the root span by default
   --
   -- @function kong.tracer.new_span
+  -- @phases rewrite, access, header_filter, response, body_filter, log, admin_api
   -- @treturn table span
   function self.active_span()
-    check_phase(phases_with_ctx)
+    check_phase(PHASES.request)
 
     return get_namespaced_ctx(self.name, "active_span")
   end
@@ -270,9 +270,10 @@ local function new_tracer(name, options)
   --- Set the active span
   --
   -- @function kong.tracer.new_span
+  -- @phases rewrite, access, header_filter, response, body_filter, log, admin_api
   -- @tparam table span
   function self.set_active_span(span)
-    check_phase(phases_with_ctx)
+    check_phase(PHASES.request)
 
     set_namespaced_ctx(self.name, "active_span", span)
   end
@@ -280,11 +281,12 @@ local function new_tracer(name, options)
   --- Create a new Span
   --
   -- @function kong.tracer.new_span
+  -- @phases rewrite, access, header_filter, response, body_filter, log, admin_api
   -- @tparam string name span name
-  -- @tparam table options TODO:
+  -- @tparam table options TODO(mayo)
   -- @treturn table span
   function self.start_span(...)
-    check_phase(phases_with_ctx)
+    check_phase(PHASES.request)
 
     if self.noop then
       return setmetatable({}, noop_span_mt)
@@ -303,6 +305,7 @@ local function new_tracer(name, options)
   -- Please note that socket is not available in the log phase, use `ngx.timer.at` instead
   --
   -- @function kong.tracer.process_span
+  -- @phases log
   -- @tparam function processor a function that accecpt a span as the parameter
   function self.process_span(processor)
     check_phase(PHASES.log)
@@ -326,6 +329,9 @@ local function new_tracer(name, options)
   return tracer_cache[name]
 end
 tracer_mt.new = new_tracer
+tracer_mt.__call = function (_, ...)
+  return new_tracer(...)
+end
 
 
 return {

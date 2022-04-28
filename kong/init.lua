@@ -86,6 +86,7 @@ local kong_error_handlers = require "kong.error_handlers"
 local migrations_utils = require "kong.cmd.utils.migrations"
 local plugin_servers = require "kong.runloop.plugin_servers"
 local lmdb_txn = require "resty.lmdb.transaction"
+local instrumentation = require "kong.tracing.instrumentation"
 
 local kong             = kong
 local ngx              = ngx
@@ -476,8 +477,10 @@ function Kong.init()
   math.randomseed()
 
   kong_global.init_pdk(kong, config)
+  instrumentation.init(config)
 
   local db = assert(DB.new(config))
+  instrumentation.db_query(db.connector)
   assert(db:init_connector())
 
   schema_state = assert(db:schema_state())

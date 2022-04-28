@@ -1,40 +1,25 @@
-local base = require "resty.core.base"
+local table = table
 local pack = table.pack
 local unpack = table.unpack
 local pdk_tracer = require "kong.pdk.tracer".new()
 
 
 local _M = {}
-local nop_mt = {
+local noop_mt = {
   __index = function ()
     return function () end
   end
 }
 
-local noop_tracer = pdk_tracer.new("instrument", { noop = true })
 
-
--- get tracer from context
-local function get_tracer()
-  if not base.get_quest() then
-    return noop_tracer
-  end
-
-  local span = pdk_tracer.active_span()
-  if not span then
-    return noop_tracer
-  end
-
-  return span.tracer
-end
-_M.tracer = get_tracer
+local instrument_tracer = pdk_tracer.new("instrument")
 
 
 local wrap_func
 do
   local wrap_mt = {
     __call = function (self, ...)
-      local span = get_tracer().start_span(self.name)
+      local span = instrument_tracer.start_span(self.name)
       local ret = pack(self.f(...))
       span:finish()
       return unpack(ret)
@@ -58,7 +43,7 @@ function instrumentations.db_query(connector)
   local f = connector.query
 
   local function wrap(self, sql, ...)
-    local span = get_tracer().start_span("query")
+    local span = instrument_tracer.start_span("query")
     local ret = pack(f(self, sql, ...))
     span:finish()
     return unpack(ret)
@@ -75,13 +60,9 @@ function instrumentations.router(router)
 end
 
 
-function _M.init()
-  if not kong then
-    return -- testing env
-  end
-
-  local trace_types = kong.configuration.instrumentation_trace_types
-  if trace_types ~= "table" or not next(trace_types) then
+function _M.init(config)
+  local trace_types = config.instrumentation_trace_types
+  if type(trace_types) ~= "table" then
     return
   end
 
@@ -103,4 +84,4 @@ function _M.init()
 end
 
 
-return setmetatable(_M, nop_mt)
+return setmetatable(_M, noop_mt)

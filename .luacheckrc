@@ -67,3 +67,11 @@ files["spec/**/*.lua"] = {
 files["spec-old-api/**/*.lua"] = {
     std = "ngx_lua+busted",
 }
+
+
+files["kong/tracing/instrumentation.lua"] = {
+    read_globals = {
+       "table.pack",
+       "table.unpack",
+    }
+}

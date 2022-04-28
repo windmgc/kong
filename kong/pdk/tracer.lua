@@ -9,6 +9,7 @@ local require = require
 local bit = require "bit"
 local tablepool = require "tablepool"
 local new_tab = require "table.new"
+local base = require "resty.core.base"
 local utils = require "kong.tools.utils"
 local phase_checker = require "kong.pdk.private.phases"
 
@@ -157,7 +158,6 @@ function span_mt:finish(end_time_ns)
     return
   end
 
-  self.is_recording = false
   -- insert the span to ctx
   if not ngx.ctx.KONG_SPANS then
     ngx.ctx.KONG_SPANS = tablepool.fetch("KONG_SPANS", 4, 0)
@@ -262,7 +262,9 @@ local function new_tracer(name, options)
   -- @phases rewrite, access, header_filter, response, body_filter, log, admin_api
   -- @treturn table span
   function self.active_span()
-    check_phase(PHASES.request)
+    if not base.get_request() then
+      return
+    end
 
     return get_namespaced_ctx(self.name, "active_span")
   end
@@ -273,8 +275,10 @@ local function new_tracer(name, options)
   -- @phases rewrite, access, header_filter, response, body_filter, log, admin_api
   -- @tparam table span
   function self.set_active_span(span)
-    check_phase(PHASES.request)
-
+    if not base.get_request() then
+      return
+    end
+    
     set_namespaced_ctx(self.name, "active_span", span)
   end
 
@@ -286,7 +290,9 @@ local function new_tracer(name, options)
   -- @tparam table options TODO(mayo)
   -- @treturn table span
   function self.start_span(...)
-    check_phase(PHASES.request)
+    if not base.get_request() then
+      return setmetatable({}, noop_span_mt)
+    end
 
     if self.noop then
       return setmetatable({}, noop_span_mt)
@@ -319,7 +325,7 @@ local function new_tracer(name, options)
     end
 
     for _, span in ipairs(ngx.ctx.KONG_SPANS) do
-      if span.tracer.name == "core" or span.tracer.name == self.name then
+      if span.tracer.name == "instrument" or span.tracer.name == self.name then
         processor(span)
       end
     end

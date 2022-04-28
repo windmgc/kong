@@ -1,7 +1,5 @@
 local helpers = require "spec.helpers"
-local constants = require "kong.constants"
 local cjson = require "cjson"
-local pl_file = require "pl.file"
 
 local TCP_PORT = 35001
 for _, strategy in helpers.each_strategy() do
@@ -62,7 +60,8 @@ for _, strategy in helpers.each_strategy() do
 
       -- Making sure it's alright
       local spans = cjson.decode(res)
-      assert.is_same(2, #spans)
+      assert.is_same(3, #spans)
+      error(spans)
     end)
   end)
 end

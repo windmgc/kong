@@ -15,6 +15,7 @@ local tablepool    = require "tablepool"
 
 
 local PluginsIterator = require "kong.runloop.plugins_iterator"
+local instrumentation = require "kong.tracing.instrumentation"
 
 
 local kong         = kong
@@ -809,6 +810,7 @@ do
       return nil, "could not create router: " .. err
     end
 
+    instrumentation.router(new_router)
     router = new_router
 
     if version then

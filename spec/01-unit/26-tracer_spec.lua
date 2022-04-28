@@ -25,6 +25,10 @@ describe("Tracer PDK", function()
       assert.is_true(ok)
       assert.is_true(tracer.noop)
       assert.same("core", tracer.name)
+
+      tracer = tracer.new("test")
+      assert.same("test", tracer.name)
+      assert.is_false(tracer.noop)
     end)
 
   end)

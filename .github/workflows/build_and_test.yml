@@ -31,7 +31,7 @@ jobs:
       with:
         repository: Kong/kong-build-tools
         path: kong-build-tools
-        ref: master
+        ref: add_sp/feat/lj-ver-with-time
 
     - name: Checkout go-pluginserver
       if: steps.cache-deps.outputs.cache-hit != 'true'

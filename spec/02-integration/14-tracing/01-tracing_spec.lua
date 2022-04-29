@@ -60,8 +60,8 @@ for _, strategy in helpers.each_strategy() do
 
       -- Making sure it's alright
       local spans = cjson.decode(res)
-      assert.is_same(3, #spans)
-      error(spans)
+      assert.is_same(4, #spans)
+      -- error(res)
     end)
   end)
 end

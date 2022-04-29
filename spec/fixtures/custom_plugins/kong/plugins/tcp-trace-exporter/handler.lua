@@ -1,10 +1,11 @@
 local cjson = require "cjson"
+local str = require "resty.string"
 
 local ngx = ngx
 local kong = kong
 local table = table
 local insert = table.insert
-
+local to_hex = str.to_hex
 
 local _M = {
   PRIORITY = 1001,
@@ -21,6 +22,9 @@ end
 
 function _M:access(config)
   local tracer = kong.tracer(tracer_name)
+
+  local rows = kong.db.routes:page()
+  print("XXXXXXXXXXXXXXXX: ", #rows)
 
   local span = tracer.start_span("access")
   span:finish()
@@ -51,7 +55,6 @@ function _M:log(config)
   local span = tracer.active_span()
 
   if span then
-    --print(inspect(span))
     span:finish()
   end
 
@@ -59,8 +62,17 @@ function _M:log(config)
   tracer.process_span(function (span)
     local s = table.clone(span)
     s.tracer = nil
+    s.parent = nil
+    s.trace_id = to_hex(s.trace_id)
+    s.parent_id = s.parent_id and to_hex(s.parent_id)
+    s.span_id = to_hex(s.span_id)
     insert(spans, s)
   end)
+
+  local sort_by_start_time = function(a,b)
+    return a.start_time_ns < b.start_time_ns
+  end
+  table.sort(spans, sort_by_start_time)
 
   local data = cjson.encode(spans)
 

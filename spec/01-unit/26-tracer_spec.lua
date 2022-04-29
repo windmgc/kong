@@ -96,6 +96,7 @@ describe("Tracer PDK", function()
         attributes = {
           "key1", "value1"
         },
+        active = true,
         is_recording = true,
       }
 
@@ -103,6 +104,7 @@ describe("Tracer PDK", function()
       local c_span = table.clone(span)
       c_span.tracer = nil
       c_span.span_id = nil
+      c_span.parent = nil
       assert.same(tpl, c_span)
 
       assert.has_no.error(function () span:finish() end)
@@ -135,6 +137,38 @@ describe("Tracer PDK", function()
       c_tracer.set_active_span(child_span)
       local third_child_span = c_tracer.start_span("child2")
       assert.same(child_span.span_id, third_child_span.parent_id)
+    end)
+
+    it("cascade spans", function ()
+      local root_span = c_tracer.start_span("root")
+
+      assert.same(root_span, c_tracer.active_span())
+
+      local level1_span = c_tracer.start_span("level1")
+      assert.same(root_span, level1_span.parent)
+
+      c_tracer.set_active_span(level1_span)
+      assert.same(level1_span, c_tracer.active_span())
+
+      local level2_span = c_tracer.start_span("level2")
+      assert.same(level1_span, level2_span.parent)
+
+      local level21_span = c_tracer.start_span("level2.1")
+      assert.same(level1_span, level21_span.parent)
+      level21_span:finish()
+
+      c_tracer.set_active_span(level2_span)
+      assert.same(level2_span, c_tracer.active_span())
+
+      local level3_span = c_tracer.start_span("level3")
+      assert.same(level2_span, level3_span.parent)
+      level3_span:finish()
+
+      level2_span:finish()
+      assert.same(level1_span, c_tracer.active_span())
+
+      level1_span:finish()
+      assert.same(root_span, c_tracer.active_span())
     end)
 
     it("access span table after finished", function ()

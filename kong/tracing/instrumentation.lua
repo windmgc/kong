@@ -12,7 +12,7 @@ local noop_mt = {
 }
 
 
-local instrument_tracer = pdk_tracer.new("instrument")
+local instrument_tracer = pdk_tracer.new("global")
 
 
 local wrap_func
@@ -43,7 +43,11 @@ function instrumentations.db_query(connector)
   local f = connector.query
 
   local function wrap(self, sql, ...)
-    local span = instrument_tracer.start_span("query")
+    local span = instrument_tracer.start_span("query", {
+      attributes = {
+        sql = sql,
+      }
+    })
     local ret = pack(f(self, sql, ...))
     span:finish()
     return unpack(ret)

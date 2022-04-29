@@ -103,7 +103,7 @@ local function new_span(tracer, name, options)
   options = options or {}
 
   -- avoid reallocate
-  local span = tablepool.fetch("KONG_SPAN", 0, 10)
+  local span = tablepool.fetch("KONG_SPAN", 0, 11)
   -- cache tracer ref, to get hooks / span processer
   -- tracer ref will not be cleared when the span table released
   span.tracer = tracer
@@ -130,6 +130,7 @@ local function new_span(tracer, name, options)
                   or options.sampled
                   or band(tracer.sampler(), FLAG_SAMPLED) == FLAG_SAMPLED
   span.is_recording = true
+  span.parent = parent_span
 
   return setmetatable(span, span_mt)
 end
@@ -156,6 +157,10 @@ function span_mt:finish(end_time_ns)
 
   if not self.is_recording then
     return
+  end
+
+  if self.active and self.tracer.active_span() == self then
+    self.tracer.set_active_span(self.parent)
   end
 
   -- insert the span to ctx
@@ -237,6 +242,7 @@ local function set_namespaced_ctx(namespace, key, value)
 end
 
 local tracer_cache = setmetatable({}, {__mode = "k"})
+local instrument_tracer_name = "global"
 
 --- New Tracer
 local function new_tracer(name, options)
@@ -266,7 +272,8 @@ local function new_tracer(name, options)
       return
     end
 
-    return get_namespaced_ctx(self.name, "active_span")
+    return get_namespaced_ctx(self.name, "active_span") or
+            get_namespaced_ctx(instrument_tracer_name, "active_span")
   end
 
   --- Set the active span
@@ -278,7 +285,10 @@ local function new_tracer(name, options)
     if not base.get_request() then
       return
     end
-    
+
+    if span then
+      span.active = true
+    end
     set_namespaced_ctx(self.name, "active_span", span)
   end
 
@@ -325,7 +335,7 @@ local function new_tracer(name, options)
     end
 
     for _, span in ipairs(ngx.ctx.KONG_SPANS) do
-      if span.tracer.name == "instrument" or span.tracer.name == self.name then
+      if span.tracer.name == instrument_tracer_name or span.tracer.name == self.name then
         processor(span)
       end
     end

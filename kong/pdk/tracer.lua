@@ -60,14 +60,17 @@ end
 local span_mt = {}
 span_mt.__index = span_mt
 
--- noop Span metatable
-local noop_span_mt = {}
-noop_span_mt.is_recording = false
-noop_span_mt.__index = noop_span_mt
-noop_span_mt.finish = function () end
-noop_span_mt.set_attribute = function () end
-noop_span_mt.add_event = function () end
-
+-- Noop Span
+local noop_span = {}
+-- Using static function instead of metatable.__index for better performance
+noop_span.is_recording = false
+noop_span.finish = function () end
+noop_span.set_attribute = function () end
+noop_span.add_event = function () end
+-- Avoid noop span table being modifed
+setmetatable(noop_span, {
+  __newindex = function() end,
+})
 
 local function new_span(tracer, name, options)
   if tracer == nil then
@@ -244,6 +247,12 @@ end
 local tracer_cache = setmetatable({}, {__mode = "k"})
 local instrument_tracer_name = "global"
 
+local noop_tracer = {}
+noop_tracer.start_span = function () return noop_span end
+noop_tracer.active_span = function () end
+noop_tracer.set_active_span = function () end
+noop_tracer.process_span = function () end
+
 --- New Tracer
 local function new_tracer(name, options)
   name = name or "default"
@@ -257,8 +266,10 @@ local function new_tracer(name, options)
   }
 
   options = options or {}
+  if options.noop then
+    return noop_tracer
+  end
 
-  self.noop = options.noop == true
   self.sampler = options.sampler or always_on_sampler
 
   --- Get the active span
@@ -301,11 +312,7 @@ local function new_tracer(name, options)
   -- @treturn table span
   function self.start_span(...)
     if not base.get_request() then
-      return setmetatable({}, noop_span_mt)
-    end
-
-    if self.noop then
-      return setmetatable({}, noop_span_mt)
+      return noop_span
     end
 
     local span = new_span(self, ...)
@@ -348,7 +355,8 @@ tracer_mt.new = new_tracer
 tracer_mt.__call = function (_, ...)
   return new_tracer(...)
 end
-
+noop_tracer.new = tracer_mt.new
+noop_tracer.__call = tracer_mt.__call
 
 return {
   new = function ()

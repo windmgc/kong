@@ -12,34 +12,74 @@ describe("Tracer PDK", function()
   describe("test tracer init", function()
 
     it("tracer instance is created", function ()
-      ok, err = pcall(require "kong.pdk.tracer".new)
+      ok, err = pcall(require "kong.pdk.tracing".new)
       assert.is_true(ok, err)
 
-      ok, err = pcall(kong.tracer.new)
+      ok, err = pcall(kong.tracing.new, "test")
       assert.is_true(ok, err)
     end)
 
     it("default tracer instance", function ()
       local tracer
-      ok, tracer = pcall(require "kong.pdk.tracer".new)
+      ok, tracer = pcall(require "kong.pdk.tracing".new)
       assert.is_true(ok)
-      assert.is_true(tracer.noop)
-      assert.same("core", tracer.name)
+      assert.same("noop", tracer.name)
 
       tracer = tracer.new("test")
       assert.same("test", tracer.name)
-      assert.is_false(tracer.noop)
+    end)
+
+    it("noop tracer has same functions and config as normal tracer", function ()
+      local tracer = require "kong.pdk.tracing".new().new()
+      local noop_tracer = require "kong.pdk.tracing".new()
+      local ignore_list = {
+        sampler = 1,
+        active_span_key = 1,
+      }
+      for k, _ in pairs(tracer) do
+        if ignore_list[k] ~= 1 then
+          assert.not_nil(noop_tracer[k], k)
+        end
+      end
+    end)
+
+    it("global tracer", function ()
+      -- Noop tracer
+      assert.same(kong.tracing, require "kong.pdk.tracing".new())
+      assert.same(kong.tracing, kong.tracing.new("noop", { noop = true }))
+
+      -- functions
+      assert.same("function", type(kong.tracing.new))
+      assert.same("function", type(kong.tracing.start_span))
+      assert.same("function", type(kong.tracing.set_active_span))
+      assert.same("function", type(kong.tracing.active_span))
+      assert.same("function", type(kong.tracing.process_span))
+      assert.same("function", type(kong.tracing.set_global_tracer))
+    end)
+
+    it("replace global tracer", function ()
+      local new_tracer = kong.tracing.new()
+      kong.tracing.set_global_tracer(new_tracer)
+
+      assert.same(new_tracer, kong.tracing)
+      assert.same(new_tracer, require "kong.pdk.tracing".new())
+
+      package.loaded["kong.pdk.tracing"] = nil
+      local kong_global = require "kong.global"
+      _G.kong = kong_global.new()
+      kong_global.init_pdk(kong)
     end)
 
   end)
 
   describe("span spec", function ()
     -- common tracer
-    local c_tracer = kong.tracer.new("normal")
+    local c_tracer = kong.tracing.new("normal")
     -- noop tracer
-    local n_tracer = require "kong.pdk.tracer".new()
+    local n_tracer = require "kong.pdk.tracing".new()
 
     before_each(function()
+      ngx.ctx.KONG_SPANS = nil
       c_tracer.set_active_span(nil)
       n_tracer.set_active_span(nil)
     end)
@@ -96,8 +136,6 @@ describe("Tracer PDK", function()
         attributes = {
           "key1", "value1"
         },
-        active = true,
-        is_recording = true,
       }
 
       span = c_tracer.start_span("meow", tpl)
@@ -126,6 +164,7 @@ describe("Tracer PDK", function()
 
     it("child spans", function ()
       local root_span = c_tracer.start_span("parent")
+      c_tracer.set_active_span(root_span)
       local child_span = c_tracer.start_span("child")
 
       assert.same(root_span.span_id, child_span.parent_id)
@@ -141,6 +180,7 @@ describe("Tracer PDK", function()
 
     it("cascade spans", function ()
       local root_span = c_tracer.start_span("root")
+      c_tracer.set_active_span(root_span)
 
       assert.same(root_span, c_tracer.active_span())
 
@@ -179,6 +219,7 @@ describe("Tracer PDK", function()
 
     it("ends active span", function ()
       local span = c_tracer.start_span("meow")
+      c_tracer.set_active_span(span)
 
       -- create sub spans
       local sub = c_tracer.start_span("sub")
@@ -192,7 +233,6 @@ describe("Tracer PDK", function()
 
       assert.same(span, active_span)
     end)
-
   end)
 
 end)

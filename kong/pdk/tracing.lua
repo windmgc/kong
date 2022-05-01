@@ -3,9 +3,10 @@
 --
 -- Application-level tracing for Kong.
 --
--- @module kong.tracer
+-- @module kong.tracing
 
 local require = require
+local ffi = require "ffi"
 local bit = require "bit"
 local tablepool = require "tablepool"
 local new_tab = require "table.new"
@@ -13,27 +14,23 @@ local base = require "resty.core.base"
 local utils = require "kong.tools.utils"
 local phase_checker = require "kong.pdk.private.phases"
 
-local error = error
-local insert = table.insert
-local setmetatable = setmetatable
-local ngx = ngx
-local rand_bytes = utils.get_rand_bytes
-local band = bit.band
-local bor = bit.bor
-local check_phase = phase_checker.check
-local PHASES = phase_checker.phases
+local ngx                = ngx
+local error              = error
+local setmetatable       = setmetatable
+local rand_bytes         = utils.get_rand_bytes
+local lshift             = bit.lshift
+local rshift             = bit.rshift
+local check_phase        = phase_checker.check
+local PHASES             = phase_checker.phases
 local ffi_time_unix_nano = utils.time_ns
+local ffi_cast           = ffi.cast
+local ffi_str            = ffi.string
 
 
---- Constants
--- @section constants
 local FLAG_SAMPLED = 0x01
 local FLAG_RECORDING = 0x02
+local FLAG_SAMPLED_AND_RECORDING = bit.bor(FLAG_SAMPLED, FLAG_RECORDING)
 
----
--- SpanKind is the type of span. Can be used to specify additional relationships between spans
--- in addition to a parent/child relationship.
--- @table SPAN_KIND
 local SPAN_KIND = {
   UNSPECIFIED = 0,
   INTERNAL = 1,
@@ -43,8 +40,8 @@ local SPAN_KIND = {
   CONSUMER = 5,
 }
 
-
 --- Generate trace ID
+-- TODO(mayo): multiple ID generator
 local function generate_trace_id()
   return rand_bytes(16)
 end
@@ -52,6 +49,39 @@ end
 --- Generate span ID
 local function generate_span_id()
   return rand_bytes(8)
+end
+
+--- Build-in sampler
+local function always_on_sampler()
+  return FLAG_SAMPLED_AND_RECORDING
+end
+
+local function always_off_sampler()
+  return 0
+end
+
+-- Fractions >= 1 will always sample. Fractions < 0 are treated as zero.
+-- spec: https://github.com/c24t/opentelemetry-specification/blob/3b3d321865cf46364bdfb292c179b6444dc96bf9/specification/sdk-tracing.md#probability-sampler-algorithm
+local function get_trace_id_based_sampler(fraction)
+  if type(fraction) ~= "number" then
+    error("invalid fraction", 2)
+  end
+
+  if fraction >= 1 then
+    return always_on_sampler
+  end
+
+  if fraction <= 0 then
+    return always_off_sampler
+  end
+
+  local upper_bound = fraction * tonumber(lshift(ffi_cast("uint64_t", 1), 63))
+
+  return function(trace_id)
+    local n = ffi_cast("uint64_t*", ffi_str(trace_id, 8))[0]
+    n = rshift(n, 1)
+    return tonumber(n) < upper_bound
+  end
 end
 
 
@@ -64,9 +94,11 @@ span_mt.__index = span_mt
 local noop_span = {}
 -- Using static function instead of metatable.__index for better performance
 noop_span.is_recording = false
-noop_span.finish = function () end
-noop_span.set_attribute = function () end
-noop_span.add_event = function () end
+noop_span.finish = function() end
+noop_span.set_attribute = function() end
+noop_span.add_event = function() end
+noop_span.record_error = function() end
+noop_span.set_status = function() end
 -- Avoid noop span table being modifed
 setmetatable(noop_span, {
   __newindex = function() end,
@@ -105,23 +137,34 @@ local function new_span(tracer, name, options)
 
   options = options or {}
 
+  -- get parent span from ctx
+  -- the ctx could either be stored in ngx.ctx or kong.ctx
+  local parent_span = options.parent or tracer.active_span()
+
+  local trace_id = parent_span and parent_span.trace_id
+    or options.trace_id
+    or generate_trace_id()
+
+  local sampled = parent_span and parent_span.sampled
+    or options.sampled
+    or tracer.sampler(trace_id) == FLAG_SAMPLED_AND_RECORDING
+
+  if not sampled then
+    return noop_span
+  end
+
   -- avoid reallocate
-  local span = tablepool.fetch("KONG_SPAN", 0, 11)
+  -- we will release the span table at the end of log phase
+  local span = tablepool.fetch("KONG_SPAN", 0, 12)
   -- cache tracer ref, to get hooks / span processer
   -- tracer ref will not be cleared when the span table released
   span.tracer = tracer
 
-  -- get parent span from ctx
-  -- the ctx could either be stored in ngx.ctx or kong.ctx
-  local parent_span = tracer.active_span()
-
   span.name = name
-  span.trace_id = parent_span and parent_span.trace_id
-                  or options.trace_id
-                  or generate_trace_id()
+  span.trace_id = trace_id
   span.span_id = generate_span_id()
   span.parent_id = parent_span and parent_span.span_id
-                        or options.parent_id
+      or options.parent_id
 
   -- specify span start time manually
   span.start_time_ns = options.start_time_ns or ffi_time_unix_nano()
@@ -130,12 +173,28 @@ local function new_span(tracer, name, options)
 
   -- indicates whether the span should be reported
   span.sampled = parent_span and parent_span.sampled
-                  or options.sampled
-                  or band(tracer.sampler(), FLAG_SAMPLED) == FLAG_SAMPLED
-  span.is_recording = true
+      or options.sampled
+      or sampled
+
+  -- TODO(mayo): span.is_recording
+
   span.parent = parent_span
 
-  return setmetatable(span, span_mt)
+  setmetatable(span, span_mt)
+
+  -- insert the span to ctx
+  local spans = ngx.ctx.KONG_SPANS
+  if not spans then
+    spans = tablepool.fetch("KONG_SPANS", 10, 0)
+    spans[0] = 0
+    ngx.ctx.KONG_SPANS = spans
+  end
+
+  local len = spans[0] + 1
+  spans[len] = span
+  spans[0] = len
+
+  return span
 end
 
 --- Ends a Span
@@ -158,20 +217,10 @@ function span_mt:finish(end_time_ns)
 
   self.end_time_ns = end_time_ns or ffi_time_unix_nano()
 
-  if not self.is_recording then
-    return
-  end
-
   if self.active and self.tracer.active_span() == self then
     self.tracer.set_active_span(self.parent)
+    self.active = nil
   end
-
-  -- insert the span to ctx
-  if not ngx.ctx.KONG_SPANS then
-    ngx.ctx.KONG_SPANS = tablepool.fetch("KONG_SPANS", 4, 0)
-  end
-
-  insert(ngx.ctx.KONG_SPANS, self)
 end
 
 --- Set an attribute to a Span
@@ -190,7 +239,7 @@ function span_mt:set_attribute(key, value)
   end
 
   if self.attributes == nil then
-    self.attributes = new_tab(0, 1)
+    self.attributes = new_tab(0, 4)
   end
 
   self.attributes[key] = value
@@ -201,19 +250,60 @@ end
 -- @module Span
 -- @tparam string name Event name
 -- @tparam number|nil time_ns Event timestamp
-function span_mt:add_event(name, time_ns)
+-- @tparam number|nil attributes attributes
+function span_mt:add_event(name, attributes, time_ns)
   if type(name) ~= "string" then
     error("invalid name", 2)
   end
 
-  if self.events == nil then
-    self.events = new_tab(1, 0)
+  if attributes ~= nil then
+    if type(attributes) ~= "table" then
+      error("invalid attribute", 2)
+    end
   end
 
-  insert(self.events, {
-    name = name,
-    time_ns = time_ns,
+  if self.events == nil then
+    self.events = new_tab(4, 0)
+    self.events[0] = 0
+  end
+
+  local obj = new_tab(0, 3)
+  obj.name = name
+  obj.time_ns = time_ns or ffi_time_unix_nano()
+  if attributes then
+    obj.attributes = attributes
+  end
+
+  -- cache table length to avoid calling `luaH_getn`
+  local len = self.events[0] + 1
+  self.events[len] = obj
+  self.events[0] = len
+end
+
+-- Adds an error event to a Span
+--
+-- @module Span
+-- @tparam string err error string
+function span_mt:record_error(err)
+  if type(err) ~= "string" then
+    err = tostring(err)
+  end
+
+  self:add_event("exception", {
+    ["exception.message"] = err,
   })
+end
+
+-- Adds an error event to a Span
+--
+-- @module Span
+-- @tparam number status status code, 0 unset, 1 ok, 2 error
+function span_mt:set_status(status)
+  if type(status) ~= "number" then
+    error("invalid status", 2)
+  end
+
+  self.status = status
 end
 
 
@@ -222,36 +312,15 @@ end
 local tracer_mt = {}
 tracer_mt.__index = tracer_mt
 
---- Build-in sampler
-local always_on_sampler
-do
-  local flag = bor(FLAG_SAMPLED, FLAG_RECORDING)
-  function always_on_sampler()
-    return flag
-  end
-end
 
-
-local function get_namespaced_ctx(namespace, key)
-  return (ngx.ctx or {})[namespace .. "_" .. key]
-end
-
-local function set_namespaced_ctx(namespace, key, value)
-  if not ngx.ctx then
-    return -- testing
-  end
-
-  ngx.ctx[namespace .. "_" .. key] = value
-end
-
-local tracer_cache = setmetatable({}, {__mode = "k"})
-local instrument_tracer_name = "global"
+local tracer_cache = setmetatable({}, { __mode = "k" })
 
 local noop_tracer = {}
-noop_tracer.start_span = function () return noop_span end
-noop_tracer.active_span = function () end
-noop_tracer.set_active_span = function () end
-noop_tracer.process_span = function () end
+noop_tracer.name = "noop"
+noop_tracer.start_span = function() return noop_span end
+noop_tracer.active_span = function() end
+noop_tracer.set_active_span = function() end
+noop_tracer.process_span = function() end
 
 --- New Tracer
 local function new_tracer(name, options)
@@ -270,12 +339,14 @@ local function new_tracer(name, options)
     return noop_tracer
   end
 
-  self.sampler = options.sampler or always_on_sampler
+  options.sampling_rate = options.sampling_rate or 1.0
+  self.sampler = get_trace_id_based_sampler(options.sampling_rate)
+  self.active_span_key = name .. "_" .. "active_span"
 
   --- Get the active span
   -- Returns the root span by default
   --
-  -- @function kong.tracer.new_span
+  -- @function kong.tracing.new_span
   -- @phases rewrite, access, header_filter, response, body_filter, log, admin_api
   -- @treturn table span
   function self.active_span()
@@ -283,13 +354,12 @@ local function new_tracer(name, options)
       return
     end
 
-    return get_namespaced_ctx(self.name, "active_span") or
-            get_namespaced_ctx(instrument_tracer_name, "active_span")
+    return ngx.ctx[self.active_span_key]
   end
 
   --- Set the active span
   --
-  -- @function kong.tracer.new_span
+  -- @function kong.tracing.new_span
   -- @phases rewrite, access, header_filter, response, body_filter, log, admin_api
   -- @tparam table span
   function self.set_active_span(span)
@@ -300,12 +370,13 @@ local function new_tracer(name, options)
     if span then
       span.active = true
     end
-    set_namespaced_ctx(self.name, "active_span", span)
+
+    ngx.ctx[self.active_span_key] = span
   end
 
   --- Create a new Span
   --
-  -- @function kong.tracer.new_span
+  -- @function kong.tracing.new_span
   -- @phases rewrite, access, header_filter, response, body_filter, log, admin_api
   -- @tparam string name span name
   -- @tparam table options TODO(mayo)
@@ -315,19 +386,13 @@ local function new_tracer(name, options)
       return noop_span
     end
 
-    local span = new_span(self, ...)
-    -- set root span
-    if not self.active_span() then
-      self.set_active_span(span)
-    end
-
-    return span
+    return new_span(self, ...)
   end
 
   --- Batch process spans
   -- Please note that socket is not available in the log phase, use `ngx.timer.at` instead
   --
-  -- @function kong.tracer.process_span
+  -- @function kong.tracing.process_span
   -- @phases log
   -- @tparam function processor a function that accecpt a span as the parameter
   function self.process_span(processor)
@@ -342,7 +407,7 @@ local function new_tracer(name, options)
     end
 
     for _, span in ipairs(ngx.ctx.KONG_SPANS) do
-      if span.tracer.name == instrument_tracer_name or span.tracer.name == self.name then
+      if span.tracer.name == self.name then
         processor(span)
       end
     end
@@ -351,15 +416,36 @@ local function new_tracer(name, options)
   tracer_cache[name] = setmetatable(self, tracer_mt)
   return tracer_cache[name]
 end
+
 tracer_mt.new = new_tracer
-tracer_mt.__call = function (_, ...)
+noop_tracer.new = new_tracer
+
+local global_tracer
+tracer_mt.set_global_tracer = function(tracer)
+  if type(tracer) ~= "table" or getmetatable(tracer) ~= tracer_mt then
+    error("invalid tracer", 2)
+  end
+
+  tracer.active_span_key = "active_span"
+  global_tracer = tracer
+  -- replace kong.pdk.tracer
+  if kong then
+    kong.tracing = tracer
+  end
+end
+noop_tracer.set_global_tracer = tracer_mt.set_global_tracer
+global_tracer = new_tracer("core", { noop = true })
+
+tracer_mt.__call = function(_, ...)
   return new_tracer(...)
 end
-noop_tracer.new = tracer_mt.new
-noop_tracer.__call = tracer_mt.__call
+setmetatable(noop_tracer, {
+  __call = tracer_mt.__call,
+  __newindex = function () end
+})
 
 return {
-  new = function ()
-    return new_tracer("core", { noop = true })
+  new = function()
+    return global_tracer
   end,
 }

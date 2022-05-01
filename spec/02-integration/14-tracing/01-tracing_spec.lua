@@ -36,6 +36,7 @@ for _, strategy in helpers.each_strategy() do
         database = strategy,
         nginx_conf = "spec/fixtures/custom_nginx.template",
         plugins = "tcp-trace-exporter",
+        instrumentation_trace = true,
       })
 
       proxy_client = helpers.proxy_client()
@@ -60,8 +61,7 @@ for _, strategy in helpers.each_strategy() do
 
       -- Making sure it's alright
       local spans = cjson.decode(res)
-      assert.is_same(4, #spans)
-      -- error(res)
+      assert.is_same(5, #spans, res)
     end)
   end)
 end

@@ -210,7 +210,7 @@ local MAJOR_MODULES = {
       "nginx",
       "cluster",
       "vault",
-      "tracer",
+      "tracing",
 }
 
 if ngx.config.subsystem == 'http' then

@@ -689,7 +689,9 @@ local CONF_INFERENCES = {
   lmdb_environment_path = { typ = "string" },
   lmdb_map_size = { typ = "string" },
 
+  instrumentation_trace = { typ = "boolean" },
   instrumentation_trace_types = { typ = "array" },
+  instrumentation_trace_sampling_rate = { typ = "number" },
 }
 
 

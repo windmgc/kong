@@ -14,19 +14,21 @@ local _M = {
 local tracer_name = "tcp-trace-exporter"
 
 function _M:rewrite(config)
-  local tracer = kong.tracer(tracer_name)
+  local tracer = kong.tracing(tracer_name)
 
-  tracer.start_span("rewrite")
+  local span = tracer.start_span("rewrite", {
+    parent = kong.tracing.active_span(),
+  })
+  tracer.set_active_span(span)
 end
 
 
 function _M:access(config)
-  local tracer = kong.tracer(tracer_name)
-
-  local rows = kong.db.routes:page()
-  print("XXXXXXXXXXXXXXXX: ", #rows)
+  local tracer = kong.tracing(tracer_name)
 
   local span = tracer.start_span("access")
+  tracer.set_active_span(span)
+  kong.db.routes:page()
   span:finish()
 end
 
@@ -51,15 +53,18 @@ local function push_data(premature, data, config)
 end
 
 function _M:log(config)
-  local tracer = kong.tracer(tracer_name)
+  local tracer = kong.tracing(tracer_name)
   local span = tracer.active_span()
 
   if span then
+    kong.log.debug("Exit span name: ", span.name)
     span:finish()
   end
 
+  kong.log.debug("Total spans: ", #ngx.ctx.KONG_SPANS)
+
   local spans = {}
-  tracer.process_span(function (span)
+  local process_span = function (span)
     local s = table.clone(span)
     s.tracer = nil
     s.parent = nil
@@ -67,7 +72,9 @@ function _M:log(config)
     s.parent_id = s.parent_id and to_hex(s.parent_id)
     s.span_id = to_hex(s.span_id)
     insert(spans, s)
-  end)
+  end
+  tracer.process_span(process_span)
+  kong.tracing.process_span(process_span)
 
   local sort_by_start_time = function(a,b)
     return a.start_time_ns < b.start_time_ns

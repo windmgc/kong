@@ -15,12 +15,12 @@ __DATA__
     location = /t {
         access_by_lua_block {
             local pdk = require "kong.pdk".new()
-            pdk.tracer.start_span("access")
+            pdk.tracing.start_span("access")
         }
 
         content_by_lua_block {
             local pdk = require "kong.pdk".new()
-            local span = pdk.tracer.active_span()
+            local span = pdk.tracing.active_span()
             ngx.say(span and span.name)
         }
     }
@@ -38,14 +38,14 @@ nil
     location = /t {
         access_by_lua_block {
             local pdk = require "kong.pdk".new()
-            local tracer = pdk.tracer.new("t")
+            local tracer = pdk.tracing.new("t")
             local span = tracer.start_span("access")
             tracer.set_active_span(span)
         }
 
         content_by_lua_block {
             local pdk = require "kong.pdk".new()
-            local span = pdk.tracer("t").active_span()
+            local span = pdk.tracing("t").active_span()
             ngx.say(span and span.name)
         }
     }
@@ -63,14 +63,14 @@ access
     location = /t {
         access_by_lua_block {
             local pdk = require "kong.pdk".new()
-            local tracer = pdk.tracer("t")
+            local tracer = pdk.tracing("t")
             local span = tracer.start_span("access")
             tracer.set_active_span(span)
         }
 
         content_by_lua_block {
             local pdk = require "kong.pdk".new()
-            local span = pdk.tracer("t").active_span()
+            local span = pdk.tracing("t").active_span()
             local tracer = span.tracer
             ngx.say(tracer and tracer.name)
         }

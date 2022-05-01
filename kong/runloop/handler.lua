@@ -11,7 +11,6 @@ local certificate  = require "kong.runloop.certificate"
 local concurrency  = require "kong.concurrency"
 local workspaces   = require "kong.workspaces"
 local lrucache     = require "resty.lrucache"
-local tablepool    = require "tablepool"
 
 
 local PluginsIterator = require "kong.runloop.plugins_iterator"
@@ -1258,6 +1257,7 @@ return {
     before = function(ctx)
       local server_port = var.server_port
       ctx.host_port = HOST_PORTS[server_port] or server_port
+      instrumentation.http_request()
     end,
     after = NOOP,
   },
@@ -1645,17 +1645,11 @@ return {
     end
   },
   log = {
-    before = NOOP,
+    before = function(ctx)
+      instrumentation.runloop_log_before(ctx)
+    end,
     after = function(ctx)
-      -- Clears the span table and put back the table pool,
-      -- this avoids reallocation.
-      -- The span table MUST NOT be used after released.
-      if type(ctx.KONG_SPANS) == "table" then
-        for _, span in ipairs(ctx.KONG_SPANS) do
-          tablepool.release("kong_span", span)
-        end
-        tablepool.release("kong_spans", ctx.KONG_SPANS)
-      end
+      instrumentation.runloop_log_after(ctx)
 
       update_lua_mem()
 

@@ -254,7 +254,7 @@ build = {
     ["kong.pdk.nginx"] = "kong/pdk/nginx.lua",
     ["kong.pdk.cluster"] = "kong/pdk/cluster.lua",
     ["kong.pdk.vault"] = "kong/pdk/vault.lua",
-    ["kong.pdk.tracer"] = "kong/pdk/tracer.lua",
+    ["kong.pdk.tracing"] = "kong/pdk/tracing.lua",
 
     ["kong.plugins.base_plugin"] = "kong/plugins/base_plugin.lua",
 

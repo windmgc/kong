@@ -14,6 +14,10 @@ local _M = {
 local tracer_name = "tcp-trace-exporter"
 
 function _M:rewrite(config)
+  if not config.custom_spans then
+    return
+  end
+
   local tracer = kong.tracing(tracer_name)
 
   local span = tracer.start_span("rewrite", {
@@ -26,10 +30,17 @@ end
 function _M:access(config)
   local tracer = kong.tracing(tracer_name)
 
-  local span = tracer.start_span("access")
-  tracer.set_active_span(span)
+  local span
+  if config.custom_spans then
+    span = tracer.start_span("access")
+    tracer.set_active_span(span)
+  end
+  
   kong.db.routes:page()
-  span:finish()
+
+  if span then
+    span:finish()
+  end
 end
 
 
@@ -61,7 +72,7 @@ function _M:log(config)
     span:finish()
   end
 
-  kong.log.debug("Total spans: ", #ngx.ctx.KONG_SPANS)
+  kong.log.debug("Total spans: ", ngx.ctx.KONG_SPANS and #ngx.ctx.KONG_SPANS)
 
   local spans = {}
   local process_span = function (span)

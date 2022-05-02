@@ -9,6 +9,7 @@ return {
         fields = {
           { host = typedefs.host({ required = true }), },
           { port = typedefs.port({ required = true }), },
+          { custom_spans = { type = "boolean", default = false }, }
         }
       }
     }

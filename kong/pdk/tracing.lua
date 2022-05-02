@@ -26,6 +26,7 @@ local ffi_time_unix_nano = utils.time_ns
 local ffi_cast           = ffi.cast
 local ffi_str            = ffi.string
 
+local NOOP = function () end
 
 local FLAG_SAMPLED = 0x01
 local FLAG_RECORDING = 0x02
@@ -94,14 +95,14 @@ span_mt.__index = span_mt
 local noop_span = {}
 -- Using static function instead of metatable.__index for better performance
 noop_span.is_recording = false
-noop_span.finish = function() end
-noop_span.set_attribute = function() end
-noop_span.add_event = function() end
-noop_span.record_error = function() end
-noop_span.set_status = function() end
+noop_span.finish = NOOP
+noop_span.set_attribute = NOOP
+noop_span.add_event = NOOP
+noop_span.record_error = NOOP
+noop_span.set_status = NOOP
 -- Avoid noop span table being modifed
 setmetatable(noop_span, {
-  __newindex = function() end,
+  __newindex = NOOP,
 })
 
 local function new_span(tracer, name, options)
@@ -318,9 +319,9 @@ local tracer_cache = setmetatable({}, { __mode = "k" })
 local noop_tracer = {}
 noop_tracer.name = "noop"
 noop_tracer.start_span = function() return noop_span end
-noop_tracer.active_span = function() end
-noop_tracer.set_active_span = function() end
-noop_tracer.process_span = function() end
+noop_tracer.active_span = NOOP
+noop_tracer.set_active_span = NOOP
+noop_tracer.process_span = NOOP
 
 --- New Tracer
 local function new_tracer(name, options)

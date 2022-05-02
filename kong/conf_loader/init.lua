@@ -1175,6 +1175,26 @@ local function check_and_infer(conf, opts)
     errors[#errors + 1] = "upstream_keepalive_idle_timeout must be 0 or greater"
   end
 
+  if conf.instrumentation_trace then
+    if #conf.instrumentation_trace_types == 0 then
+      errors[#errors + 1] = "instrumentation_trace_types must be specified"
+    end
+    local available_types = {
+      all = 1,
+      db_query = 1,
+      router = 1,
+      http_request = 1,
+    }
+    for _, trace_type in ipairs(conf.instrumentation_trace_types) do
+      if not available_types[trace_type] then
+        errors[#errors + 1] = "invalid instrumentation_trace_types: " .. trace_type
+      end
+    end
+    if conf.instrumentation_trace_sampling_rate < 0 or conf.instrumentation_trace_sampling_rate > 1 then
+      errors[#errors + 1] = "instrumentation_trace_sampling_rate must be between 0 and 1"
+    end
+  end
+
   return #errors == 0, errors[1], errors
 end
 

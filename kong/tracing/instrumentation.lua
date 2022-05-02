@@ -9,16 +9,10 @@ local pdk_tracer  = require "kong.pdk.tracing".new()
 local propagation = require "kong.plugins.zipkin.tracing_headers"
 local time_ns     = require "kong.tools.utils".time_ns
 local tablepool   = require "tablepool"
-
-local _M = {}
-local noop_mt = {
-  __index = function()
-    return function() end
-  end
-}
-
+local tablex      = require "pl.tablex"
 
 local instrument_tracer = pdk_tracer
+local NOOP = function() end
 
 
 local function start_root_span()
@@ -26,9 +20,9 @@ local function start_root_span()
     return
   end
 
-  local active_span = instrument_tracer.active_span()
-  if active_span then
-    return active_span
+  local root_span = ngx.ctx.ROOT_SPAN
+  if root_span then
+    return
   end
 
   local start_time = ngx.ctx.KONG_PROCESSING_START
@@ -36,9 +30,10 @@ local function start_root_span()
       or time_ns()
 
   -- we will later modify the span name, span_id
-  local root_span = instrument_tracer.start_span("kong request", {
+  root_span = instrument_tracer.start_span("kong request", {
     start_time_ns = start_time,
   })
+  ngx.ctx.ROOT_SPAN = root_span
   instrument_tracer.set_active_span(root_span)
 end
 
@@ -64,14 +59,13 @@ end
 
 
 local instrumentations = {}
-
+local available_types = {}
 
 local function set_headers(found_header_type, proxy_span)
   local set_header = kong.service.request.set_header
   found_header_type = found_header_type or "ot"
 
-  if found_header_type == "b3"
-  then
+  if found_header_type == "b3" then
     set_header("x-b3-traceid", to_hex(proxy_span.trace_id))
     set_header("x-b3-spanid", to_hex(proxy_span.span_id))
     if proxy_span.parent_id then
@@ -115,46 +109,6 @@ local function set_headers(found_header_type, proxy_span)
   end
 end
 
--- http_request (root span)
-function instrumentations.http_request()
-  local req = kong.request
-
-  local headers = req.get_headers()
-  local header_type, trace_id, span_id, parent_id, sampled, _ = propagation.parse(headers)
-  local method = req.get_method()
-  local path = req.get_path()
-  local span_name = method .. " " .. path
-
-  -- TODO(mayo): add host, port...
-  local active_span = instrument_tracer.active_span()
-  if not active_span then
-    active_span = instrument_tracer.start_span(span_name, {
-      trace_id = trace_id,
-      span_id = span_id,
-      parent_id = parent_id,
-      sampled = sampled,
-    })
-    instrument_tracer.set_active_span(active_span)
-  else
-    active_span.name = span_name
-    if trace_id then
-      active_span.trace_id = trace_id
-    end
-
-    if parent_id then
-      active_span.parent_id = parent_id
-    end
-
-    if sampled ~= nil then
-      active_span.sampled = sampled
-    end
-  end
-
-  active_span:set_attribute("http.host", req.get_host())
-
-  set_headers(header_type, active_span)
-end
-
 -- db query
 function instrumentations.db_query(connector)
   local f = connector.query
@@ -180,9 +134,56 @@ function instrumentations.router(router)
   router.exec = wrap_func("router", f)
 end
 
+-- http_request (root span)
+function instrumentations.http_request()
+  local req = kong.request
+
+  local headers = req.get_headers()
+  local header_type, trace_id, span_id, parent_id, sampled, _ = propagation.parse(headers)
+  local method = req.get_method()
+  local path = req.get_path()
+  local span_name = method .. " " .. path
+
+  -- TODO(mayo): add host, port...
+  local root_span = ngx.ctx.ROOT_SPAN
+  if not root_span then
+    root_span = instrument_tracer.start_span(span_name, {
+      trace_id = trace_id,
+      span_id = span_id,
+      parent_id = parent_id,
+      sampled = sampled,
+    })
+    ngx.ctx.ROOT_SPAN = root_span
+    instrument_tracer.set_active_span(root_span)
+  else
+    root_span.name = span_name
+    if trace_id then
+      root_span.trace_id = trace_id
+    end
+
+    if parent_id then
+      root_span.parent_id = parent_id
+    end
+
+    if sampled ~= nil then
+      root_span.sampled = sampled
+    end
+  end
+
+  root_span:set_attribute("http.host", req.get_host())
+
+  set_headers(header_type, root_span)
+end
+
+for k, _ in pairs(instrumentations) do
+  available_types[k] = true
+end
+instrumentations.available_types = available_types
+
 function instrumentations.runloop_log_before(ctx)
-  local root_span = instrument_tracer.active_span()
-  if root_span then
+  local root_span = ngx.ctx.ROOT_SPAN
+  -- check root span type to avoid encounter error
+  if root_span and type(root_span.finish) == "function" then
     root_span:finish()
   end
 end
@@ -199,31 +200,39 @@ function instrumentations.runloop_log_after(ctx)
   end
 end
 
-function _M.init(config)
+function instrumentations.init(config)
   local trace_types = config.instrumentation_trace_types
-  local enabled = config.instrumentation_trace == true
+  local enabled = config.instrumentation_trace
   local sampling_rate = config.instrumentation_trace_sampling_rate
-  if not enabled or type(trace_types) ~= "table" or sampling_rate <= 0 then
-    return
-  end
+  assert(type(trace_types) == "table")
+  assert(type(sampling_rate) == "number")
 
-  if trace_types[1] == "all" then
-    for typ, func in pairs(instrumentations) do
-      _M[typ] = func
+  -- noop instrumentations
+  -- TODO(mayo): support stream module
+  if not enabled or ngx.config.subsystem == "stream" then
+    for k, _ in pairs(available_types) do
+      instrumentations[k] = NOOP
     end
   end
 
-  for _, typ in ipairs(trace_types) do
-    local func = instrumentations[typ]
-    if func ~= nil then
-      _M[typ] = func
+  if trace_types[1] ~= "all" then
+    for k, _ in pairs(available_types) do
+      if not tablex.find(trace_types, k) then
+        instrumentations[k] = NOOP
+      end
     end
   end
 
-  instrument_tracer = pdk_tracer.new("instrument", {
-    sampling_rate = sampling_rate,
-  })
-  instrument_tracer.set_global_tracer(instrument_tracer)
+  local inspect = require "inspect"
+  print(inspect(instrumentations), inspect(trace_types))
+
+  -- global tracer
+  if enabled then
+    instrument_tracer = pdk_tracer.new("instrument", {
+      sampling_rate = sampling_rate,
+    })
+    instrument_tracer.set_global_tracer(instrument_tracer)
+  end
 end
 
-return setmetatable(_M, noop_mt)
+return instrumentations

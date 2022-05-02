@@ -205,7 +205,7 @@ function instrumentations.init(config)
   local enabled = config.instrumentation_trace
   local sampling_rate = config.instrumentation_trace_sampling_rate
   assert(type(trace_types) == "table")
-  assert(type(sampling_rate) == "number")
+  assert(sampling_rate >= 0 and sampling_rate <= 1)
 
   -- noop instrumentations
   -- TODO(mayo): support stream module

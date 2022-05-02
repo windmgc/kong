@@ -181,7 +181,6 @@ untrusted_lua_sandbox_environment =
 
 openresty_path =
 
-instrumentation_trace = off
-instrumentation_trace_types = all
-instrumentation_trace_sampling_rate = 1.0
+instrumentation_traces = off
+instrumentation_traces_sampling_rate = 1.0
 ]]

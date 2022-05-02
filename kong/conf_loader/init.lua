@@ -689,9 +689,8 @@ local CONF_INFERENCES = {
   lmdb_environment_path = { typ = "string" },
   lmdb_map_size = { typ = "string" },
 
-  instrumentation_trace = { typ = "boolean" },
-  instrumentation_trace_types = { typ = "array" },
-  instrumentation_trace_sampling_rate = { typ = "number" },
+  instrumentation_traces = { typ = "array" },
+  instrumentation_traces_sampling_rate = { typ = "number" },
 }
 
 
@@ -1175,22 +1174,17 @@ local function check_and_infer(conf, opts)
     errors[#errors + 1] = "upstream_keepalive_idle_timeout must be 0 or greater"
   end
 
-  if conf.instrumentation_trace then
-    if #conf.instrumentation_trace_types == 0 then
-      errors[#errors + 1] = "instrumentation_trace_types must be specified"
-    end
-    local available_types = {
-      all = 1,
-      db_query = 1,
-      router = 1,
-      http_request = 1,
-    }
-    for _, trace_type in ipairs(conf.instrumentation_trace_types) do
-      if not available_types[trace_type] then
-        errors[#errors + 1] = "invalid instrumentation_trace_types: " .. trace_type
+  --error(conf.instrumentation_traces)
+  if conf.instrumentation_traces and #conf.instrumentation_traces > 0 then
+    local available_types = { "off", "all", "db_query", "router", "http_request", "balancer",
+      "plugin_rewrite", "plugin_access", "plugin_header_filter" }
+
+    for _, trace_type in ipairs(conf.instrumentation_traces) do
+      if not tablex.find(available_types, trace_type) then
+        errors[#errors + 1] = "invalid instrumentation trace type: " .. trace_type
       end
     end
-    if conf.instrumentation_trace_sampling_rate < 0 or conf.instrumentation_trace_sampling_rate > 1 then
+    if conf.instrumentation_traces_sampling_rate < 0 or conf.instrumentation_traces_sampling_rate > 1 then
       errors[#errors + 1] = "instrumentation_trace_sampling_rate must be between 0 and 1"
     end
   end

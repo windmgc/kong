@@ -7,7 +7,7 @@ for _, strategy in helpers.each_strategy() do
 
   describe("tracing instrumentations spec #" .. strategy, function()
 
-    local function setup_instrumentations(types, custom_spans, enabled)
+    local function setup_instrumentations(types, custom_spans)
       local bp, _ = assert(helpers.get_db_utils(strategy, {
         "services",
         "routes",
@@ -37,8 +37,7 @@ for _, strategy in helpers.each_strategy() do
         database = strategy,
         nginx_conf = "spec/fixtures/custom_nginx.template",
         plugins = "tcp-trace-exporter",
-        instrumentation_trace = enabled or "on",
-        instrumentation_trace_types = types,
+        instrumentation_traces = types,
       })
 
       proxy_client = helpers.proxy_client()
@@ -46,7 +45,7 @@ for _, strategy in helpers.each_strategy() do
 
     describe("off", function ()
       lazy_setup(function()
-        setup_instrumentations("db_query", false, "off")
+        setup_instrumentations("off", false)
       end)
 
       lazy_teardown(function()

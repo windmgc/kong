@@ -223,9 +223,6 @@ function instrumentations.init(config)
     end
   end
 
-  local inspect = require "inspect"
-  print(inspect(instrumentations), inspect(trace_types))
-
   -- global tracer
   if enabled then
     instrument_tracer = pdk_tracer.new("instrument", {

@@ -3,13 +3,12 @@ local cjson = require "cjson"
 
 local TCP_PORT = 35001
 for _, strategy in helpers.each_strategy() do
-  local proxy_client, db, _
+  local proxy_client
 
   describe("tracing instrumentations spec #" .. strategy, function()
 
     local function setup_instrumentations(types, custom_spans, enabled)
-      local bp
-      bp, db = assert(helpers.get_db_utils(strategy, {
+      local bp, _ = assert(helpers.get_db_utils(strategy, {
         "services",
         "routes",
         "plugins",

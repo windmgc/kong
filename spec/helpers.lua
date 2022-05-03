@@ -986,7 +986,6 @@ local function grpc_client(host, port, opts)
       end
 
       local opts = gen_grpcurl_opts(pl_tablex.merge(t.opts, args.opts, true))
-      ngx.log(ngx.ERR, string.format(t.cmd_template, opts, service))
       local ok, _, out, err = exec(string.format(t.cmd_template, opts, service), true)
 
       if ok then

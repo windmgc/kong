@@ -201,12 +201,12 @@ function instrumentations.runloop_log_after(ctx)
 end
 
 function instrumentations.init(config)
-  local trace_types = config.instrumentation_traces
-  local sampling_rate = config.instrumentation_traces_sampling_rate
+  local trace_types = config.opentelemetry_tracing
+  local sampling_rate = config.opentelemetry_tracing_sampling_rate
   assert(type(trace_types) == "table" and #trace_types > 0)
   assert(sampling_rate >= 0 and sampling_rate <= 1)
 
-  local enabled = config.instrumentation_traces[1] ~= "off"
+  local enabled = trace_types[1] ~= "off"
 
   -- noop instrumentations
   -- TODO(mayo): support stream module

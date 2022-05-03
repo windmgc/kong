@@ -689,8 +689,8 @@ local CONF_INFERENCES = {
   lmdb_environment_path = { typ = "string" },
   lmdb_map_size = { typ = "string" },
 
-  instrumentation_traces = { typ = "array" },
-  instrumentation_traces_sampling_rate = { typ = "number" },
+  opentelemetry_tracing = { typ = "array" },
+  opentelemetry_tracing_sampling_rate = { typ = "number" },
 }
 
 
@@ -1174,18 +1174,17 @@ local function check_and_infer(conf, opts)
     errors[#errors + 1] = "upstream_keepalive_idle_timeout must be 0 or greater"
   end
 
-  --error(conf.instrumentation_traces)
-  if conf.instrumentation_traces and #conf.instrumentation_traces > 0 then
+  if conf.opentelemetry_tracing and #conf.opentelemetry_tracing > 0 then
     local available_types = { "off", "all", "db_query", "router", "http_request", "balancer",
       "plugin_rewrite", "plugin_access", "plugin_header_filter" }
 
-    for _, trace_type in ipairs(conf.instrumentation_traces) do
+    for _, trace_type in ipairs(conf.opentelemetry_tracing) do
       if not tablex.find(available_types, trace_type) then
-        errors[#errors + 1] = "invalid instrumentation trace type: " .. trace_type
+        errors[#errors + 1] = "invalid opentelemetry tracing type: " .. trace_type
       end
     end
-    if conf.instrumentation_traces_sampling_rate < 0 or conf.instrumentation_traces_sampling_rate > 1 then
-      errors[#errors + 1] = "instrumentation_trace_sampling_rate must be between 0 and 1"
+    if conf.opentelemetry_tracing_sampling_rate < 0 or conf.opentelemetry_tracing_sampling_rate > 1 then
+      errors[#errors + 1] = "opentelemetry_tracing_sampling_rate must be between 0 and 1"
     end
   end
 

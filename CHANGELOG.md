@@ -140,7 +140,7 @@
 
 - **File-log**: Restrict log file paths by configuring 
   `plugin_file_log_immutable_path`.
-  #8758](https://github.com/Kong/kong/pull/8758)
+  [#8758](https://github.com/Kong/kong/pull/8758)
 
 #### Configuration
 

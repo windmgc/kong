@@ -15,7 +15,9 @@ local path_pattern = string.format([[^%s[^*&%%\`]+$]], path_prefix)
 local err_msg = 
   string.format("not a valid file name, "
               .. "or the prefix is not [%s], "
-              .. "or contains `..`",
+              .. "or contains `..`, "
+              .. "you may need to check the configuration "
+              .. "`plugin_file_log_immutable_path`",
                 path_prefix)
 
 

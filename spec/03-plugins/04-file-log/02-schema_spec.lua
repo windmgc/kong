@@ -5,7 +5,9 @@ local IMMUTABLE_PATH = "/tmp/"
 local ERR_MSG_INVLID_FILENAME =
   string.format("not a valid file name, "
               .. "or the prefix is not [%s], "
-              .. "or contains `..`",
+              .. "or contains `..`, "
+              .. "you may need to check the configuration "
+              .. "`plugin_file_log_immutable_path`",
                  IMMUTABLE_PATH)
 
 insulate("Plugin: file-log (schema)", function()
@@ -126,7 +128,10 @@ insulate("Plugin: file-log (schema)", function()
       error = {
         config = {
           path = "not a valid file name, "
-              .. "or the prefix is not [/kong/logs/], or contains `..`",
+              .. "or the prefix is not [/kong/logs/], "
+              .. "or contains `..`, "
+              .. "you may need to check the configuration "
+              .. "`plugin_file_log_immutable_path`",
         },
       },
     },

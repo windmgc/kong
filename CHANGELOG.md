@@ -111,6 +111,10 @@
 - Change the default of `lua_ssl_trusted_certificate` to `system`
   [#8602](https://github.com/Kong/kong/pull/8602) to automatically load trusted CA list from system CA store.
 
+- Add a new configuration `plugin_file_log_immutable_path`
+  to restrict access to the file system for `File-log` plugins.
+  [#8758](https://github.com/Kong/kong/pull/8758)
+
 ### Dependencies
 
 - Bumped pgmoon from 1.13.0 to 1.14.0
@@ -133,6 +137,10 @@
 - **Zipkin**: add support for including HTTP path in span name
   through configuration property `http_span_name`.
   [#8150](https://github.com/Kong/kong/pull/8150)
+
+- **File-log**: Restrict log file paths by configuring 
+  `plugin_file_log_immutable_path`.
+  #8758](https://github.com/Kong/kong/pull/8758)
 
 #### Configuration
 

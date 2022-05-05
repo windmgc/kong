@@ -688,6 +688,8 @@ local CONF_INFERENCES = {
 
   lmdb_environment_path = { typ = "string" },
   lmdb_map_size = { typ = "string" },
+
+  plugin_file_log_immutable_path = { typ = "string" },
 }
 
 

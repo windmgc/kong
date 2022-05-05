@@ -180,4 +180,6 @@ untrusted_lua_sandbox_requires =
 untrusted_lua_sandbox_environment =
 
 openresty_path =
+
+plugin_file_log_immutable_path = 
 ]]
